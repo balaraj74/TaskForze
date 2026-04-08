@@ -587,7 +587,7 @@ export default function Dashboard() {
                       <p className="text-sm text-amber-400/80 mt-1">Agents cannot read emails or manage your calendar until you grant permission.</p>
                     </div>
                     <a
-                      href="http://localhost:8000/auth/login"
+                      href="/api/auth/login"
                       className="flex shrink-0 items-center gap-2 rounded-xl bg-amber-500/20 px-4 py-2.5 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-500/30"
                     >
                       Connect <ExternalLink className="h-4 w-4" />
@@ -741,7 +741,9 @@ export default function Dashboard() {
                             <div key={w.id} className="relative pl-5 border-l border-white/10">
                               <div className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-[#7b61ff] shadow-[0_0_8px_#7b61ff]" />
                               <p className="text-[9px] font-bold uppercase tracking-widest text-[#9b87ff]">Completed</p>
-                              <p className="mt-0.5 text-sm font-medium text-white line-clamp-2">{w.original_request}</p>
+                              <p className="mt-0.5 text-sm font-medium text-white line-clamp-2">
+                                {w.user_intent ?? w.original_request ?? "Workflow completed"}
+                              </p>
                             </div>
                           ))}
                           {workflows.length === 0 && (
@@ -900,4 +902,3 @@ export default function Dashboard() {
     </AuthGuard>
   );
 }
-

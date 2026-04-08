@@ -21,6 +21,7 @@ export type TaskItem = {
 export type WorkflowItem = {
   id: string;
   user_intent?: string;
+  original_request?: string;
   created_at?: string;
   status?: string;
   plan?: Array<unknown>;

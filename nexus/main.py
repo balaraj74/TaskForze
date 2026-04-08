@@ -52,26 +52,37 @@ try:
 except Exception:
     logfire = None
 
-if logfire:
-    logfire.configure(token=settings.logfire_token or None)
+logfire_enabled = False
+if logfire and settings.logfire_token:
+    try:
+        logfire.configure(token=settings.logfire_token)
+        logfire_enabled = True
+    except Exception as exc:
+        logger.warning("logfire_disabled", error=str(exc))
 
 
 # ── Lifespan (startup/shutdown) ───────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifecycle — start scheduler, create tables."""
+    print("DEBUG: lifespan executing")
     logger.info("nexus_starting", version="2.0.0")
 
     # Create DB tables (if using SQLite fallback or fresh DB)
     try:
+        import asyncio
         from nexus.db.engine import engine
         from nexus.db.models import Base
         from nexus.db.schema import ensure_sqlite_schema_compat
 
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        if settings.database_url.startswith("sqlite"):
-            await ensure_sqlite_schema_compat(engine)
+        async def _init_db():
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            if settings.database_url.startswith("sqlite"):
+                await ensure_sqlite_schema_compat(engine)
+                
+        # 5 second timeout so Cloud Run healthcheck doesn't hang if DB is unreachable
+        await asyncio.wait_for(_init_db(), timeout=5.0)
         logger.info("database_tables_ready")
     except Exception as exc:
         logger.warning("database_setup_skipped", error=str(exc))
@@ -94,9 +105,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-if logfire:
+if logfire_enabled:
     logfire.instrument_fastapi(app)
-
 # ── CORS ──────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,

@@ -2,17 +2,74 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithPopup } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+} from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthProvider";
-import { Layout, ShieldAlert } from "lucide-react";
+import { Mail, ShieldAlert } from "lucide-react";
 import Image from "next/image";
+
+function formatAuthError(err: unknown) {
+  const message = err instanceof Error ? err.message : "Failed to sign in";
+  const normalized = message.toLowerCase();
+  const code =
+    typeof err === "object" && err && "code" in err && typeof err.code === "string"
+      ? err.code
+      : "";
+
+  if (normalized.includes("invalid_client") || normalized.includes("oauth client was invalid")) {
+    const domain = typeof window !== "undefined" ? window.location.hostname : "this app domain";
+    return `Google sign-in is misconfigured for this Firebase project. Re-enable the Google provider in Firebase Authentication, verify the linked OAuth web client in Google Cloud Credentials, and add ${domain} to Firebase Authentication > Settings > Authorized domains.`;
+  }
+
+  if (normalized.includes("unauthorized-domain")) {
+    const domain = typeof window !== "undefined" ? window.location.hostname : "this app domain";
+    return `This domain is not authorized for Firebase sign-in yet. Add ${domain} in Firebase Authentication > Settings > Authorized domains and try again.`;
+  }
+
+  if (code === "auth/operation-not-allowed") {
+    return "This sign-in method is not enabled yet. Turn on Email/Password in Firebase Authentication > Sign-in method and try again.";
+  }
+
+  if (code === "auth/invalid-email") {
+    return "Enter a valid email address.";
+  }
+
+  if (code === "auth/email-already-in-use") {
+    return "An account with this email already exists. Try signing in instead.";
+  }
+
+  if (code === "auth/user-not-found" || code === "auth/wrong-password" || code === "auth/invalid-credential") {
+    return "Incorrect email or password.";
+  }
+
+  if (code === "auth/weak-password") {
+    return "Use a stronger password with at least 6 characters.";
+  }
+
+  if (code === "auth/too-many-requests") {
+    return "Too many login attempts. Please wait a moment and try again.";
+  }
+
+  if (code === "auth/popup-closed-by-user") {
+    return "Google sign-in was closed before it finished.";
+  }
+
+  return message;
+}
 
 export default function LoginPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -20,16 +77,47 @@ export default function LoginPage() {
     }
   }, [user, loading, router]);
 
+  const resetError = () => {
+    if (error) setError(null);
+  };
+
+  const handleEmailAuth = async () => {
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !password) {
+      setError("Enter your email and password.");
+      return;
+    }
+
+    if (mode === "signup" && password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      if (mode === "signup") {
+        await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      } else {
+        await signInWithEmailAndPassword(auth, trimmedEmail, password);
+      }
+    } catch (err) {
+      setError(formatAuthError(err));
+      setIsSubmitting(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     try {
-      setIsSigningIn(true);
+      setIsSubmitting(true);
       setError(null);
       await signInWithPopup(auth, googleProvider);
       // Successful sign in will trigger the useEffect above to redirect
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to sign in";
-      setError(message);
-      setIsSigningIn(false);
+      setError(formatAuthError(err));
+      setIsSubmitting(false);
     }
   };
 
@@ -54,6 +142,33 @@ export default function LoginPage() {
           multiply your productivity.
         </p>
 
+        <div className="mb-6 grid grid-cols-2 rounded-2xl border border-white/10 bg-white/5 p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("signin");
+              setError(null);
+            }}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              mode === "signin" ? "bg-white text-black" : "text-[#94a3b8] hover:text-white"
+            }`}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("signup");
+              setError(null);
+            }}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              mode === "signup" ? "bg-white text-black" : "text-[#94a3b8] hover:text-white"
+            }`}
+          >
+            Create account
+          </button>
+        </div>
+
         {error && (
           <div className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-left text-sm text-rose-200">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
@@ -61,13 +176,90 @@ export default function LoginPage() {
           </div>
         )}
 
+        <div className="mb-4 space-y-4 text-left">
+          <div>
+            <label htmlFor="email" className="mb-2 block text-sm font-medium text-[#cbd5e1]">
+              Email
+            </label>
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-md">
+              <Mail className="h-4 w-4 shrink-0 text-[#94a3b8]" />
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  resetError();
+                }}
+                placeholder="you@example.com"
+                className="w-full bg-transparent text-white outline-none placeholder:text-[#64748b]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="password" className="mb-2 block text-sm font-medium text-[#cbd5e1]">
+              Password
+            </label>
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-md">
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  resetError();
+                }}
+                placeholder={mode === "signup" ? "Create a password" : "Enter your password"}
+                className="w-full bg-transparent text-white outline-none placeholder:text-[#64748b]"
+              />
+            </div>
+          </div>
+
+          {mode === "signup" && (
+            <div>
+              <label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium text-[#cbd5e1]">
+                Confirm password
+              </label>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-md">
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value);
+                    resetError();
+                  }}
+                  placeholder="Re-enter your password"
+                  className="w-full bg-transparent text-white outline-none placeholder:text-[#64748b]"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleEmailAuth}
+          disabled={isSubmitting}
+          className="mb-4 flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[#7b61ff] to-[#24d4ff] px-6 py-4 text-base font-semibold text-white transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:hover:scale-100"
+        >
+          {isSubmitting ? "Please wait..." : mode === "signup" ? "Create account" : "Sign in with email"}
+        </button>
+
+        <div className="mb-4 flex items-center gap-4 text-xs uppercase tracking-[0.28em] text-[#64748b]">
+          <div className="h-px flex-1 bg-white/10" />
+          <span>Or</span>
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
+
         <button
           onClick={handleGoogleSignIn}
-          disabled={isSigningIn}
+          disabled={isSubmitting}
           className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl bg-white px-6 py-4 text-base font-medium text-black transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:hover:scale-100"
         >
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-          {isSigningIn ? (
+          {isSubmitting ? (
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-black border-r-transparent" />
           ) : (
             <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -89,11 +281,11 @@ export default function LoginPage() {
               />
             </svg>
           )}
-          <span>{isSigningIn ? "Signing in..." : "Continue with Google"}</span>
+          <span>{isSubmitting ? "Signing in..." : "Continue with Google"}</span>
         </button>
 
         <p className="mt-8 text-sm text-[#47516b]">
-          Secured by Google Authentication
+          Secured by Firebase Authentication
         </p>
       </div>
     </div>
