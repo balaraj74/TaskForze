@@ -1,0 +1,12 @@
+FROM alpine:3.21
+
+ARG TARGETPLATFORM
+
+RUN apk add --no-cache ca-certificates tzdata
+
+COPY $TARGETPLATFORM/autoforze /usr/local/bin/autoforze
+COPY $TARGETPLATFORM/autoforze-launcher /usr/local/bin/autoforze-launcher
+COPY $TARGETPLATFORM/autoforze-launcher-tui /usr/local/bin/autoforze-launcher-tui
+
+ENTRYPOINT ["autoforze-launcher"]
+CMD ["-console", "-public", "-no-browser"]
