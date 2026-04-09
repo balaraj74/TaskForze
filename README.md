@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/NEXUS-TaskForze-6C63FF?style=for-the-badge&logoColor=white" alt="TaskForze" />
+<img src="https://img.shields.io/badge/-TaskForze-6C63FF?style=for-the-badge&logoColor=white" alt="TaskForze" />
 
 # 🧠 TaskForze — NEXUS
 ### *The AI That Won't Let You Forget*
