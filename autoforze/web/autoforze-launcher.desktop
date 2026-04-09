@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=AutoForze Launcher
-Comment=Web-based configuration and management UI for AutoForze
-Exec=autoforze-launcher
-Icon=autoforze-launcher
-Terminal=true
-Type=Application
-Categories=Utility;Network;
-Keywords=autoforze;ai;agent;bot;
