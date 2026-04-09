@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from nexus.agents.runtime import get_agent_statuses
 from nexus.memory.semantic_memory import memory
-from nexus.tools import db_tools
+from nexus.tools import db_tools, gtasks_tools
 
 router = APIRouter(tags=["Workflows & Tasks"])
 
@@ -55,7 +55,7 @@ async def list_tasks(status: str | None = None) -> list[dict[str, Any]]:
 @router.post("/tasks")
 async def create_task(req: CreateTaskRequest) -> dict[str, Any]:
     """Create a task directly."""
-    return await db_tools.create_task(
+    created = await db_tools.create_task(
         {
             "title": req.title,
             "description": req.description,
@@ -65,6 +65,19 @@ async def create_task(req: CreateTaskRequest) -> dict[str, Any]:
             "dependencies": req.dependencies,
         }
     )
+
+    # Sync to Google Tasks so it appears in Google Calendar
+    due = req.deadline
+    if due and hasattr(due, "isoformat"):
+        due = due.isoformat()
+
+    await gtasks_tools.create_task(
+        title=req.title,
+        notes=req.description,
+        due=due
+    )
+
+    return created
 
 
 @router.get("/tasks/{task_id}")

@@ -1,44 +1,18 @@
-"""Async SQLAlchemy engine + session factory.
+"""
+engine.py — backward-compatible re-export shim.
 
-Supports both PostgreSQL (asyncpg) and SQLite (aiosqlite) for dev fallback.
+All database access now goes through nexus.db.session.
+This file re-exports the engine and session factory for any legacy code
+that imports from nexus.db.engine.
 """
 
 from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-
-from nexus.config import settings
-
-_is_sqlite = settings.database_url.startswith("sqlite")
-
-# SQLite doesn't support pool_size or pool_pre_ping
-_engine_kwargs = {"echo": False}
-if not _is_sqlite:
-    _engine_kwargs.update(
-        pool_size=10,
-        max_overflow=20,
-        pool_pre_ping=True,
-    )
-
-engine = create_async_engine(settings.database_url, **_engine_kwargs)
-
-async_session_factory = async_sessionmaker(
+from nexus.db.session import (  # noqa: F401 — re-export for legacy imports
+    async_session as async_session_factory,
     engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
+    get_session,
+    session_ctx,
 )
 
-
-async def get_session() -> AsyncSession:  # type: ignore[misc]
-    """FastAPI dependency — yields an async DB session with auto-commit/rollback."""
-    async with async_session_factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
+__all__ = ["engine", "async_session_factory", "get_session", "session_ctx"]

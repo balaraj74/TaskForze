@@ -59,6 +59,8 @@ import { saveTask, saveWorkflow, syncTasks, syncWorkflows } from "@/lib/firestor
 import { AlertCircle, ExternalLink } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { OrchestratorView } from "@/components/OrchestratorView";
+import { AutoForzeView } from "@/components/AutoForzeView";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -67,6 +69,15 @@ export function cn(...inputs: ClassValue[]) {
 type Message = {
   role: "user" | "assistant";
   content: string;
+};
+
+type CalendarEvent = {
+  id?: string;
+  summary: string;
+  start: string;
+  end?: string;
+  description?: string;
+  link?: string;
 };
 
 const EMPTY_AGENTS: AgentStatus[] = [
@@ -141,7 +152,8 @@ export default function Dashboard() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [authFlash, setAuthFlash] = useState<{ type: "success" | "error", message: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "calendar" | "connection">("chat");
+  const [activeTab, setActiveTab] = useState<"chat" | "tasks" | "calendar" | "connection" | "orchestrator" | "autoforze">("chat");
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTranscript, setRecordingTranscript] = useState("");
@@ -261,6 +273,22 @@ export default function Dashboard() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, trace]);
+
+  useEffect(() => {
+    if (activeTab === "calendar" && authStatus?.authenticated) {
+      const fetchEvents = async () => {
+        try {
+          const res = await nexusFetch<{ events: CalendarEvent[] }>("/calendar/events");
+          if (res?.events) setCalendarEvents(res.events);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      void fetchEvents();
+      const int = window.setInterval(fetchEvents, 30000);
+      return () => window.clearInterval(int);
+    }
+  }, [activeTab, authStatus?.authenticated]);
 
   async function sendChatMessage(text: string) {
     if (!text || isLoading) return;
@@ -433,6 +461,29 @@ export default function Dashboard() {
             >
               <Smartphone className="h-5 w-5" />
             </button>
+            <button
+              onClick={() => setActiveTab("orchestrator")}
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition-all ${
+                activeTab === "orchestrator"
+                  ? "border-[#7b61ff]/50 bg-[#7b61ff]/20 text-[#7b61ff] shadow-[0_0_15px_rgba(123,97,255,0.3)] scale-105"
+                  : "border-transparent text-[#94a3b8] hover:bg-white/5 hover:text-white"
+              }`}
+              title="Orchestrator Dashboard"
+            >
+              <Cpu className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setActiveTab("autoforze")}
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition-all relative overflow-hidden group ${
+                activeTab === "autoforze"
+                  ? "border-[#7b61ff]/50 bg-[#7b61ff]/20 text-[#7b61ff] shadow-[0_0_15px_rgba(123,97,255,0.3)] scale-105"
+                  : "border-transparent text-[#94a3b8] hover:bg-[#7b61ff]/20 hover:text-[#7b61ff]"
+              }`}
+              title="AutoForze Kernel"
+            >
+               <div className="absolute inset-0 bg-[#7b61ff] opacity-0 group-hover:animate-ping-slow rounded-full mix-blend-screen pointer-events-none" />
+               <Terminal className="h-5 w-5 relative z-10" />
+            </button>
           </nav>
           
           <div className="mt-auto flex w-full flex-col items-center gap-4 hidden sm:flex">
@@ -479,7 +530,7 @@ export default function Dashboard() {
               <button className="md:hidden text-[#94a3b8]"><Menu className="h-6 w-6" /></button>
               <div className="flex items-center gap-3">
                 <div className="relative h-8 w-8 drop-shadow-[0_0_15px_rgba(123,97,255,0.5)]">
-                  <Image src="/logo.png" alt="TaskForze Logo" fill priority className="object-contain" />
+                  <Image src="/logo_tf.png" alt="TaskForze Logo" fill priority className="object-contain" />
                 </div>
                 <h1 className="text-xl font-bold tracking-tight text-white">TaskForze</h1>
               </div>
@@ -497,18 +548,23 @@ export default function Dashboard() {
             </div>
           </header>
 
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-8 md:px-8">
-            <div className="mx-auto max-w-6xl space-y-8">
-
+          <main className="min-h-0 flex-1 px-4 py-6 md:px-8 overflow-y-auto xl:overflow-hidden flex flex-col">
+            <div className="mx-auto w-full max-w-[1600px] shrink-0 mb-4">
               {authFlash && (
                 <div className={`flex items-center gap-3 rounded-2xl p-4 font-medium backdrop-blur ${authFlash.type === "success" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"}`}>
                   <AlertCircle className="h-5 w-5 shrink-0" />
                   <p>{authFlash.message}</p>
                 </div>
               )}
+            </div>
+
+            <div className="mx-auto w-full flex-1 max-w-[1600px] flex flex-col xl:flex-row gap-6 min-h-0">
               
-              {/* ASSISTANTS OVERVIEW */}
-              <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden">
+              {/* LEFT COLUMN: WORKFORCE */}
+              <div className="xl:w-[300px] 2xl:w-[320px] shrink-0 flex flex-col gap-6 xl:overflow-y-auto pb-4 xl:pb-0 scroll-smooth custom-scrollbar">
+                
+                {/* ASSISTANTS OVERVIEW */}
+                <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-xl relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-[#7b61ff]/5 to-transparent pointer-events-none" />
                 <div className="mb-6 flex items-center justify-between relative z-10">
                   <div>
@@ -522,59 +578,133 @@ export default function Dashboard() {
                   </motion.div>
                 </div>
                 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 relative z-10">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-1 relative z-10">
                   {agents.map((agent) => {
                     const isNotes = agent.name === "notes";
+                    const isOrch = agent.name === "orchestrator";
                     const isActive = agent.status !== "idle" || (isNotes && isRecording);
                     
+                    let AgentIcon = Bot;
+                    if (agent.name.includes("orchestrator")) AgentIcon = Cpu;
+                    else if (agent.name.includes("calendar")) AgentIcon = Calendar;
+                    else if (agent.name.includes("task")) AgentIcon = CheckCircle2;
+                    else if (agent.name.includes("notes")) AgentIcon = PenBox;
+                    else if (agent.name.includes("comms")) AgentIcon = MessageCircle;
+                    else if (agent.name.includes("reminder")) AgentIcon = Bell;
+                    
+                    // Dynamic accent color per agent
+                    let iconBg = "bg-[#7b61ff]/10 text-[#7b61ff]";
+                    let borderActive = "border-[#7b61ff]/50";
+                    let ringActive = "shadow-[0_0_20px_rgba(123,97,255,0.2)]";
+                    let statusBg = "bg-[#7b61ff]/20 text-[#9b87ff] border-[#7b61ff]/30";
+                    let activeBarColor = "bg-[#7b61ff] shadow-[0_0_15px_rgba(123,97,255,0.7)]";
+                    let subColor = "text-[#7b61ff]";
+                    
+                    if (agent.name.includes("calendar")) {
+                      iconBg = "bg-sky-500/10 text-sky-400";
+                      borderActive = "border-sky-500/50";
+                      ringActive = "shadow-[0_0_20px_rgba(14,165,233,0.2)]";
+                      statusBg = "bg-sky-500/20 text-sky-300 border-sky-500/30";
+                      activeBarColor = "bg-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.7)]";
+                      subColor = "text-sky-400";
+                    } else if (agent.name.includes("task") || agent.name.includes("reminder")) {
+                      iconBg = "bg-emerald-500/10 text-emerald-400";
+                      borderActive = "border-emerald-500/50";
+                      ringActive = "shadow-[0_0_20px_rgba(16,185,129,0.2)]";
+                      statusBg = "bg-emerald-500/20 text-emerald-300 border-emerald-500/30";
+                      activeBarColor = "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.7)]";
+                      subColor = "text-emerald-400";
+                    } else if (agent.name.includes("comms")) {
+                      iconBg = "bg-amber-500/10 text-amber-400";
+                      borderActive = "border-amber-500/50";
+                      ringActive = "shadow-[0_0_20px_rgba(245,158,11,0.2)]";
+                      statusBg = "bg-amber-500/20 text-amber-300 border-amber-500/30";
+                      activeBarColor = "bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.7)]";
+                      subColor = "text-amber-400";
+                    }
+                    
+                    if (isNotes && isRecording) {
+                      borderActive = "border-rose-500/50";
+                      ringActive = "shadow-[0_0_25px_rgba(244,63,94,0.3)]";
+                      statusBg = "bg-rose-500/20 text-rose-400 border-rose-500/30";
+                      iconBg = "bg-rose-500/20 text-rose-400";
+                      activeBarColor = "bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)]";
+                      subColor = "text-rose-400";
+                    }
+
                     return (
                       <motion.div
                         key={agent.name}
                         layout
-                        onClick={isNotes ? toggleRecording : undefined}
-                        animate={{
-                          scale: isActive ? 1.02 : 1,
-                          boxShadow: isActive ? "0 0 20px rgba(123, 97, 255, 0.4)" : "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-                          borderColor: isActive ? "rgba(123, 97, 255, 0.5)" : "rgba(255, 255, 255, 0.05)",
-                        }}
-                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        onClick={isNotes ? toggleRecording : (isOrch ? () => setActiveTab("orchestrator") : undefined)}
                         className={cn(
-                          "group flex flex-col justify-between rounded-2xl border bg-black/40 p-4 transition-colors relative overflow-hidden",
-                          isActive && "animate-pulse-glow",
-                          isNotes && "cursor-pointer hover:bg-black/60",
-                          isNotes && isRecording && "border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.4)]"
+                          "cursor-pointer",
+                          "group rounded-2xl border transition-all relative overflow-hidden backdrop-blur-md",
+                          isActive ? `bg-white/[0.03] ${borderActive} ${ringActive}` : "bg-black/20 border-white/5 hover:border-white/10 hover:bg-white/[0.04]",
+                          isNotes && "cursor-pointer"
                         )}
                       >
-                        {isActive && !isRecording && (
-                          <div className="absolute top-0 left-0 w-1 h-full bg-[#7b61ff] shadow-[0_0_10px_#7b61ff]" />
+                        {/* Status bar indiciator */}
+                        {isActive && (
+                          <div className={cn("absolute top-0 left-0 w-1 h-full", activeBarColor)} />
                         )}
-                        {isNotes && isRecording && (
-                          <div className="absolute top-0 left-0 w-1 h-full bg-rose-500 shadow-[0_0_10px_#f43f5e]" />
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-[#e2e8f0] drop-shadow-md">
-                            {prettifyName(agent.name)}
-                            {isNotes && isRecording && (
-                              <span className="ml-2 inline-flex h-2 w-2 animate-ping rounded-full bg-rose-500" />
+
+                        <div className="p-4 flex flex-col gap-3">
+                          <div className="flex items-center justify-between min-h-[40px]">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "flex items-center justify-center w-10 h-10 rounded-xl rounded-tl-md transition-colors shrink-0",
+                                isActive ? iconBg : "bg-black/40 text-white/40 group-hover:text-white/70 group-hover:bg-white/5 border border-white/5"
+                              )}>
+                                <AgentIcon className="w-5 h-5" />
+                              </div>
+                              <div className="flex flex-col justify-center">
+                                <span className={cn("font-bold tracking-wide leading-tight", isActive ? "text-white" : "text-white/80")}>
+                                  {prettifyName(agent.name)}
+                                </span>
+                                <span className={cn("text-[10px] font-semibold uppercase tracking-wider truncate max-w-[120px] mt-0.5", isActive ? subColor : "text-white/30")}>
+                                  {isActive ? "Processing" : (isNotes ? "Voice Input" : "Standby")}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            {/* Badges */}
+                            <div className="shrink-0 flex items-center justify-end">
+                              {isRecording && isNotes ? (
+                                <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider border relative overflow-hidden", statusBg)}>
+                                  <span className="absolute inset-0 bg-rose-500/20 animate-pulse" />
+                                  <Mic className="h-3.5 w-3.5 relative z-10" /> 
+                                  <span className="relative z-10">Listening</span>
+                                </span>
+                              ) : isActive ? (
+                                <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider border", statusBg)}>
+                                  {agent.status}
+                                </span>
+                              ) : isNotes ? (
+                                <span className="inline-flex items-center rounded-full bg-black/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white/40 border border-white/10 group-hover:bg-white/10 group-hover:text-white/70 transition-colors">
+                                  <Mic className="h-3 w-3 mr-1" /> Record
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          
+                          <div className={cn(
+                            "rounded-xl border bg-black/40 px-3 py-2.5 text-[13px] leading-relaxed line-clamp-2 min-h-[42px] flex items-center transition-colors", 
+                            isActive ? "border-white/10 text-white/90" : "border-white/5 text-white/40"
+                          )}>
+                            {isNotes && isRecording ? (
+                              <span className="flex text-rose-300 italic items-center gap-2">
+                                <span className="relative flex h-2 w-2 shrink-0">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
+                                </span>
+                                <span className="line-clamp-2">{recordingTranscript || "Listening for speech..."}</span>
+                              </span>
+                            ) : (
+                              agent.message
                             )}
-                          </span>
-                          {isRecording && isNotes ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-rose-400 border border-rose-500/30">
-                              <Mic className="h-3 w-3" /> LISTENING
-                            </span>
-                          ) : isActive ? (
-                            <span className="inline-flex items-center rounded-full bg-[#7b61ff]/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-[#9b87ff] border border-[#7b61ff]/30">
-                              {agent.status}
-                            </span>
-                          ) : isNotes ? (
-                            <span className="inline-flex items-center rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/40 border border-white/10 group-hover:bg-white/10 group-hover:text-white/60 transition-colors">
-                              <Mic className="h-3 w-3 mr-1" /> CLICK TO RECORD
-                            </span>
-                          ) : null}
+                          </div>
                         </div>
-                        <p className={cn("mt-2 text-sm line-clamp-2", (isActive || (isNotes && isRecording)) ? "text-white/90" : "text-white/40")}>
-                          {isNotes && isRecording ? (recordingTranscript || "Listening for speech...") : agent.message}
-                        </p>
                       </motion.div>
                     );
                   })}
@@ -595,26 +725,30 @@ export default function Dashboard() {
                   </div>
                 )}
               </section>
+            </div>
 
-              {/* TABS CONTENT */}
-              <AnimatePresence mode="popLayout" initial={false}>
-                {activeTab === "chat" && (
-                  <motion.div 
-                    key="chat-view"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.3 }}
-                    className="grid grid-cols-1 gap-6 lg:grid-cols-3 xl:gap-8"
-                  >
-                    <section className="flex h-[600px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-3xl lg:col-span-2 relative">
+            {/* MIDDLE COLUMN: TABS CONTENT */}
+              <div className="flex-1 min-w-0 flex flex-col xl:overflow-hidden pb-4 xl:pb-0">
+                <AnimatePresence mode="popLayout" initial={false}>
+                  {activeTab === "autoforze" && (
+                     <AutoForzeView key="autoforze-view" />
+                  )}
+                  {activeTab === "chat" && (
+                    <motion.section 
+                      key="chat-view"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex h-[600px] xl:h-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-3xl relative"
+                    >
                       <div className="absolute inset-0 bg-gradient-to-br from-black/40 to-transparent pointer-events-none" />
                       
                       {/* Chat Header */}
                       <div className="flex items-center gap-3 border-b border-white/10 bg-black/20 p-4 relative overflow-hidden backdrop-blur-xl z-10">
                         <div className="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-[#7b61ff]/50 to-transparent" />
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-[#7b61ff] to-[#4c2dff] shadow-[0_0_15px_rgba(123,97,255,0.4)]">
-                          <Bot className="h-5 w-5 text-white" />
+                        <div className="relative flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden drop-shadow-[0_0_15px_rgba(123,97,255,0.4)]">
+                          <Image src="/logo_tf.png" alt="TaskForze Logo" fill className="object-contain" />
                         </div>
                         <div>
                           <h2 className="font-semibold text-white drop-shadow-md">Ask TaskForze</h2>
@@ -632,9 +766,11 @@ export default function Dashboard() {
                       <div className="flex-1 overflow-y-auto p-6 scroll-smooth z-10">
                         {messages.length === 0 ? (
                           <div className="flex h-full flex-col items-center justify-center text-center">
-                            <div className="rounded-full bg-white/5 p-6 border border-white/10 mb-4 shadow-[0_0_30px_rgba(123,97,255,0.15)] relative">
-                              <div className="absolute inset-0 bg-gradient-to-tr from-[#7b61ff]/20 to-transparent rounded-full animate-pulse-glow" />
-                              <Hexagon className="h-10 w-10 text-[#7b61ff]/70 relative z-10" />
+                            <div className="rounded-full bg-black/20 p-6 border border-white/10 mb-4 shadow-[0_0_30px_rgba(123,97,255,0.15)] relative flex items-center justify-center h-28 w-28">
+                              <div className="absolute inset-0 bg-gradient-to-tr from-[#7b61ff]/10 to-transparent rounded-full animate-pulse-glow" />
+                              <div className="relative w-16 h-16 z-10 drop-shadow-[0_0_15px_rgba(123,97,255,0.3)]">
+                                <Image src="/logo_tf.png" alt="TaskForze Logo" fill className="object-contain" />
+                              </div>
                             </div>
                             <h3 className="text-xl font-bold text-white drop-shadow-md">How can we help today?</h3>
                             <p className="mt-3 max-w-sm text-sm text-white/50 leading-relaxed">
@@ -651,8 +787,8 @@ export default function Dashboard() {
                                 className={`flex gap-4 ${m.role === "user" ? "justify-end" : "justify-start"}`}
                               >
                                 {m.role === "assistant" && (
-                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#7b61ff] to-[#4c2dff] shadow-[0_0_15px_rgba(123,97,255,0.3)]">
-                                    <Sparkles className="h-4 w-4 text-white" />
+                                  <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-black/40 border border-white/10 shadow-[0_0_15px_rgba(123,97,255,0.2)] overflow-hidden">
+                                    <Image src="/logo_tf.png" alt="TaskForze Bot" fill className="object-contain p-[4px]" />
                                   </div>
                                 )}
                                 <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-5 py-4 text-sm leading-relaxed shadow-lg backdrop-blur-md ${m.role === "user" ? "rounded-br-sm bg-gradient-to-tr from-white to-gray-200 text-black font-medium" : "rounded-bl-sm border border-white/10 bg-black/40 text-[#e2e8f0]"}`}>
@@ -667,8 +803,8 @@ export default function Dashboard() {
                             ))}
                             {isLoading && (
                               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4">
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-black/40 border border-white/10">
-                                  <div className="h-3 w-3 animate-ping rounded-full bg-[#7b61ff]" />
+                                <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-black/40 border border-white/10 overflow-hidden shadow-[0_0_15px_rgba(123,97,255,0.2)]">
+                                  <Image src="/logo_tf.png" alt="TaskForze Bot Loading" fill className="object-contain p-[4px] animate-pulse" />
                                 </div>
                                 <div className="rounded-2xl rounded-bl-sm border border-[#7b61ff]/30 bg-[#7b61ff]/10 px-5 py-4 text-sm text-[#9b87ff] flex items-center gap-2">
                                   <span className="relative flex h-2 w-2">
@@ -703,57 +839,8 @@ export default function Dashboard() {
                           </button>
                         </form>
                       </div>
-                    </section>
-
-                    {/* SIDE PANELS */}
-                    <div className="flex flex-col gap-6">
-                      <section className="flex min-h-[300px] flex-col rounded-3xl border border-white/10 bg-white/5 py-6 px-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl relative overflow-hidden">
-                        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-                        <div className="mb-4 flex items-center justify-between px-2">
-                          <h3 className="font-bold text-white drop-shadow-md">Up Next</h3>
-                          <Clock className="h-4 w-4 text-emerald-400" />
-                        </div>
-                        <div className="flex flex-col gap-3 overflow-y-auto px-2 pb-2">
-                          {tasks.slice(0, 4).map((task) => (
-                            <motion.div whileHover={{ scale: 1.02 }} key={task.id} className="group flex items-start gap-3 rounded-2xl border border-white/5 bg-black/40 p-3 relative overflow-hidden transition-all hover:border-emerald-500/30 hover:bg-emerald-500/5 cursor-default">
-                              <div className="mt-0.5 rounded-full border border-white/20 p-0.5 text-transparent transition-colors group-hover:border-emerald-500 group-hover:text-emerald-400">
-                                <CheckCircle2 className="h-3 w-3" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium text-white truncate text-shadow-sm">{task.title}</p>
-                              </div>
-                            </motion.div>
-                          ))}
-                          {tasks.length === 0 && (
-                            <p className="text-sm text-white/40 text-center mt-8">No tasks on your radar.</p>
-                          )}
-                        </div>
-                      </section>
-
-                      <section className="flex flex-col flex-1 rounded-3xl border border-white/10 bg-white/5 py-6 px-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl relative overflow-hidden">
-                        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#7b61ff]/50 to-transparent" />
-                        <div className="mb-4 flex items-center justify-between px-2">
-                          <h3 className="font-bold text-white drop-shadow-md">Activity</h3>
-                          <Activity className="h-4 w-4 text-[#7b61ff]" />
-                        </div>
-                        <div className="flex flex-col gap-4 px-2">
-                          {workflows.slice(0, 4).map((w) => (
-                            <div key={w.id} className="relative pl-5 border-l border-white/10">
-                              <div className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-[#7b61ff] shadow-[0_0_8px_#7b61ff]" />
-                              <p className="text-[9px] font-bold uppercase tracking-widest text-[#9b87ff]">Completed</p>
-                              <p className="mt-0.5 text-sm font-medium text-white line-clamp-2">
-                                {w.user_intent ?? w.original_request ?? "Workflow completed"}
-                              </p>
-                            </div>
-                          ))}
-                          {workflows.length === 0 && (
-                            <p className="text-sm text-white/40 text-center mt-8">No recent activity.</p>
-                          )}
-                        </div>
-                      </section>
-                    </div>
-                  </motion.div>
-                )}
+                    </motion.section>
+                  )}
 
                 {activeTab === "tasks" && (
                   <motion.div 
@@ -807,15 +894,72 @@ export default function Dashboard() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                    className="flex flex-col items-center justify-center flex-1 min-h-[600px] rounded-3xl border border-white/10 bg-white/5 p-8 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-3xl relative overflow-hidden"
+                    className="flex flex-col flex-1 min-h-[600px] rounded-3xl border border-white/10 bg-white/5 p-8 shadow-[0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-3xl relative overflow-hidden"
                   >
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(123,97,255,0.1),_transparent_70%)] pointer-events-none" />
-                    <div className="rounded-full bg-white/5 p-8 border border-white/10 mb-6 relative overflow-hidden shadow-2xl">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-[#7b61ff]/20 to-transparent animate-pulse-glow pointer-events-none" />
-                      <Calendar className="h-12 w-12 text-[#7b61ff]/80 relative z-10" />
+                    <div className="absolute inset-0 bg-gradient-to-bl from-[#7b61ff]/5 to-transparent pointer-events-none" />
+                    <div className="mb-6 flex items-center gap-3 relative z-10">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7b61ff] to-[#4c2dff] shadow-[0_0_15px_rgba(123,97,255,0.4)]">
+                        <Calendar className="h-6 w-6 text-white" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-white drop-shadow-md">Your Schedule</h2>
                     </div>
-                    <h2 className="text-3xl font-bold text-white mb-3 drop-shadow-md tracking-tight">Calendar</h2>
-                    <p className="text-white/50 max-w-md text-center text-lg leading-relaxed">Your full intelligent schedule overview is coming soon to the glass interface.</p>
+                    {calendarEvents.length === 0 ? (
+                      <div className="flex flex-1 flex-col items-center justify-center text-center p-12 relative z-10">
+                        <div className="rounded-full bg-white/5 p-6 border border-white/10 mb-4 shadow-xl relative overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-tr from-[#7b61ff]/20 to-transparent animate-pulse-glow" />
+                          <Calendar className="h-10 w-10 text-white/20 relative z-10" />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-2 drop-shadow">No upcoming events</h3>
+                        <p className="text-white/50 max-w-sm">Your schedule looks clear. Take a break or map out your next move.</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-4 overflow-y-auto relative z-10 pr-2 pb-4">
+                        {calendarEvents.map((ev, i) => {
+                          const start = new Date(ev.start);
+                          const end = ev.end ? new Date(ev.end) : null;
+                          const isPast = end ? end.getTime() < Date.now() : false;
+                          const isNow = start.getTime() <= Date.now() && (!end || end.getTime() > Date.now());
+
+                          return (
+                            <motion.div
+                              whileHover={{ x: 4 }}
+                              key={ev.id || i}
+                              className={cn(
+                                "group rounded-2xl border p-5 relative overflow-hidden shadow-lg transition-all",
+                                isNow
+                                  ? "bg-[#7b61ff]/10 border-[#7b61ff]/50"
+                                  : "bg-black/40 border-white/10 hover:bg-white/5 hover:border-[#7b61ff]/30",
+                                isPast && "opacity-60 grayscale-[0.2]"
+                              )}
+                            >
+                               {isNow && (
+                                 <div className="absolute top-0 left-0 w-1 h-full bg-[#7b61ff] shadow-[0_0_15px_#7b61ff]" />
+                               )}
+                               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                  <div className="min-w-0 pr-4">
+                                    <h4 className="text-lg font-bold text-white mb-1 drop-shadow-sm truncate">{ev.summary}</h4>
+                                    <p className="text-sm text-[#9b87ff] font-medium flex items-center gap-1.5 mb-2">
+                                      <Clock className="w-3.5 h-3.5" />
+                                      {start.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                                      {end && ` - ${end.toLocaleString("en-US", { hour: "numeric", minute: "2-digit" })}`}
+                                    </p>
+                                    {ev.description && (
+                                      <p className="text-sm text-white/60 line-clamp-2 mt-2 break-words">{ev.description}</p>
+                                    )}
+                                  </div>
+                                  <div className="flex shrink-0">
+                                    {ev.link && (
+                                      <a href={ev.link} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 border border-white/10 hover:bg-white/10 transition-colors">
+                                        <ExternalLink className="w-3.5 h-3.5" /> Open
+                                      </a>
+                                    )}
+                                  </div>
+                               </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </motion.div>
                 )}
 
@@ -826,10 +970,10 @@ export default function Dashboard() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.98 }}
                     transition={{ duration: 0.2 }}
-                    className="flex flex-col rounded-3xl border border-white/10 bg-[#161618] shadow-2xl overflow-hidden min-h-[600px] flex-1 relative"
+                    className="flex flex-col rounded-3xl border border-white/10 bg-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-3xl overflow-hidden min-h-[600px] flex-1 relative"
                   >
                     {/* Top Search bar area */}
-                    <div className="p-4 border-b border-white/10 bg-[#1c1c1e]">
+                    <div className="p-4 border-b border-white/10 bg-white/5 backdrop-blur-md">
                       <div className="relative max-w-full">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-white/40" />
                         <input 
@@ -837,7 +981,7 @@ export default function Dashboard() {
                           placeholder="Search connectors..." 
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full bg-[#252528] border border-transparent rounded-lg pl-11 pr-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-white/20 transition-all hover:bg-[#2a2a2d]" 
+                          className="w-full bg-white/5 border border-white/10 rounded-lg pl-11 pr-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#7b61ff]/50 transition-all hover:bg-white/10 backdrop-blur-sm" 
                         />
                       </div>
                     </div>
@@ -846,15 +990,12 @@ export default function Dashboard() {
                       {/* Filter / Sort Row */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                         <div className="flex items-center gap-2">
-                          <button className="bg-black rounded-full px-4 py-1.5 text-xs font-semibold text-white border border-white/10 hover:bg-white/5 transition-colors">
+                          <button className="bg-white/10 rounded-full px-4 py-1.5 text-xs font-semibold text-white border border-white/10 hover:bg-white/20 transition-colors backdrop-blur-md">
                             All Integrations
                           </button>
                         </div>
                         <div className="flex items-center gap-3">
-                          <button className="flex items-center gap-2 bg-[#252528] border border-white/5 rounded-md px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-[#2a2a2d] transition-colors">
-                            Filter by <ChevronDown className="h-4 w-4 opacity-60" />
-                          </button>
-                          <button className="flex items-center gap-2 bg-[#252528] border border-white/5 rounded-md px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-[#2a2a2d] transition-colors">
+                          <button className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-md px-3 py-1.5 text-sm font-medium text-white/70 hover:bg-white/10 transition-colors backdrop-blur-sm">
                             Sort by <ChevronDown className="h-4 w-4 opacity-60" />
                           </button>
                         </div>
@@ -865,11 +1006,11 @@ export default function Dashboard() {
                         {connectors
                           .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.desc.toLowerCase().includes(searchQuery.toLowerCase()))
                           .map(c => (
-                          <div key={c.id} className="group rounded-2xl border border-white/10 bg-[#1e1e20] p-5 hover:bg-[#252528] transition-colors flex flex-col gap-3">
+                          <div key={c.id} className="group rounded-2xl border border-white/10 bg-white/5 p-5 hover:bg-white/10 transition-colors flex flex-col gap-3 backdrop-blur-md">
                             {/* Top line: Icon, Title, and Plus button */}
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <div className="flex shrink-0 items-center justify-center w-10 h-10 rounded-xl bg-[#2a2a2d] border border-white/5 shadow-inner">
+                                <div className="flex shrink-0 items-center justify-center w-10 h-10 rounded-xl bg-white/10 border border-white/10 shadow-inner">
                                   {c.icon}
                                 </div>
                                 <span className="text-white font-semibold text-[15px]">{c.name}</span>
@@ -894,7 +1035,70 @@ export default function Dashboard() {
                     </div>
                   </motion.div>
                 )}
+
+                {activeTab === "orchestrator" && (
+                  <motion.div 
+                    key="orchestrator-view"
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    transition={{ duration: 0.2 }}
+                    className="flex flex-col rounded-3xl border border-white/10 shadow-2xl overflow-hidden min-h-[600px] flex-1 relative bg-transparent"
+                  >
+                    <OrchestratorView />
+                  </motion.div>
+                )}
               </AnimatePresence>
+              </div>
+
+              {/* RIGHT COLUMN: UP NEXT & ACTIVITY */}
+              <div className="xl:w-[300px] 2xl:w-[320px] shrink-0 flex flex-col gap-6 xl:overflow-y-auto pb-4 xl:pb-0 scroll-smooth custom-scrollbar">
+                <section className="flex flex-col rounded-3xl border border-white/10 bg-white/5 py-6 px-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl relative overflow-hidden shrink-0 min-h-[300px]">
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+                  <div className="mb-4 flex items-center justify-between px-2">
+                    <h3 className="font-bold text-white drop-shadow-md">Up Next</h3>
+                    <Clock className="h-4 w-4 text-emerald-400" />
+                  </div>
+                  <div className="flex flex-col gap-3 overflow-y-auto px-2 pb-2">
+                    {tasks.slice(0, 4).map((task) => (
+                      <motion.div whileHover={{ scale: 1.02 }} key={task.id} className="group flex items-start gap-3 rounded-2xl border border-white/5 bg-black/40 p-3 relative overflow-hidden transition-all hover:border-emerald-500/30 hover:bg-emerald-500/5 cursor-default">
+                        <div className="mt-0.5 rounded-full border border-white/20 p-0.5 text-transparent transition-colors group-hover:border-emerald-500 group-hover:text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-white truncate text-shadow-sm">{task.title}</p>
+                        </div>
+                      </motion.div>
+                    ))}
+                    {tasks.length === 0 && (
+                      <p className="text-sm text-white/40 text-center mt-8">No tasks on your radar.</p>
+                    )}
+                  </div>
+                </section>
+
+                <section className="flex flex-col flex-1 rounded-3xl border border-white/10 bg-white/5 py-6 px-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl relative overflow-hidden">
+                  <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#7b61ff]/50 to-transparent" />
+                  <div className="mb-4 flex items-center justify-between px-2">
+                    <h3 className="font-bold text-white drop-shadow-md">Activity</h3>
+                    <Activity className="h-4 w-4 text-[#7b61ff]" />
+                  </div>
+                  <div className="flex flex-col gap-4 px-2">
+                    {workflows.slice(0, 4).map((w) => (
+                      <div key={w.id} className="relative pl-5 border-l border-white/10">
+                        <div className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-[#7b61ff] shadow-[0_0_8px_#7b61ff]" />
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-[#9b87ff]">Completed</p>
+                        <p className="mt-0.5 text-sm font-medium text-white line-clamp-2">
+                          {w.user_intent ?? w.original_request ?? "Workflow completed"}
+                        </p>
+                      </div>
+                    ))}
+                    {workflows.length === 0 && (
+                      <p className="text-sm text-white/40 text-center mt-8">No recent activity.</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+
             </div>
           </main>
         </div>

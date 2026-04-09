@@ -1,6 +1,9 @@
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Increase max duration for Cloud Run (SSE/agent streaming can take 10-30s)
+export const maxDuration = 300;
+
 const HOP_BY_HOP_HEADERS = [
   "connection",
   "content-length",
@@ -33,25 +36,31 @@ async function proxyRequest(request: Request) {
   headers.delete("host");
   headers.delete("connection");
 
-  const init: RequestInit = {
+  const init: RequestInit & { duplex?: "half" } = {
     method: request.method,
     headers,
     cache: "no-store",
     redirect: "manual",
+    duplex: "half",
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = await request.arrayBuffer();
+    // Stream the request body directly instead of buffering with arrayBuffer()
+    init.body = request.body;
   }
 
   try {
-    const response = await fetch(target, init);
+    const response = await fetch(target.toString(), init);
     const responseHeaders = new Headers(response.headers);
 
     for (const header of HOP_BY_HOP_HEADERS) {
       responseHeaders.delete(header);
     }
 
+    // Pass X-Accel-Buffering to disable nginx buffering for SSE
+    responseHeaders.set("X-Accel-Buffering", "no");
+
+    // Stream the response body directly — critical for SSE/agent streaming
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,

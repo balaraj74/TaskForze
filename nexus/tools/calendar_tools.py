@@ -65,6 +65,7 @@ async def list_events(
                 "summary": ev.get("summary", "(No title)"),
                 "start": start,
                 "end": end,
+                "link": ev.get("htmlLink"),
                 "location": ev.get("location", ""),
                 "description": ev.get("description", ""),
                 "status": ev.get("status", "confirmed"),

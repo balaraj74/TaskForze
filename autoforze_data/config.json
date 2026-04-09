@@ -1,0 +1,72 @@
+{
+  "_comment": "AutoForze config for TaskForze automation. Uses Gemini AI + Telegram + TaskForze webhook skill.",
+  "version": 2,
+
+  "llm": {
+    "gemini": {
+      "enabled": true,
+      "api_key": "AIzaSyB7yO2eRk2psH6i0hTA3yWmBpaMIEph_Zw",
+      "model": "gemini-2.5-flash",
+      "max_tokens": 16000,
+      "temperature": 0.3
+    }
+  },
+
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "_comment": "Add your Telegram bot token from @BotFather to enable Telegram",
+      "token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "allow_from": []
+    },
+    "pico": {
+      "_comment": "Pico is the WebSocket channel — the frontend AutoForze UI connects here",
+      "enabled": true,
+      "token": "taskforze-autoforze-secret",
+      "allow_token_query": true,
+      "allow_origins": ["http://localhost:3000", "http://localhost:8000"],
+      "ping_interval": 30,
+      "read_timeout": 60,
+      "max_connections": 10,
+      "allow_from": []
+    }
+  },
+
+  "tools": {
+    "web": {
+      "enabled": true,
+      "prefer_native": true,
+      "duckduckgo": {
+        "enabled": true,
+        "max_results": 5
+      }
+    },
+    "exec": {
+      "enabled": true,
+      "enable_deny_patterns": true
+    },
+    "skills": {
+      "enabled": true,
+      "registries": {
+        "clawhub": {
+          "enabled": false
+        }
+      }
+    },
+    "cron": {
+      "enabled": true,
+      "exec_timeout_minutes": 5
+    },
+    "read_file": { "enabled": true },
+    "write_file": { "enabled": true },
+    "list_dir": { "enabled": true },
+    "message": { "enabled": true },
+    "spawn": { "enabled": true }
+  },
+
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790,
+    "log_level": "info"
+  }
+}

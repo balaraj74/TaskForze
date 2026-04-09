@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   title: "TaskForze - Personal Assistant",
   description:
     "TaskForze streamlines your life by managing tasks, schedules, and communications efficiently.",
+  icons: {
+    icon: "/logo_tf.png",
+  },
 };
 
 export default function RootLayout({

@@ -1,20 +1,56 @@
+# ── Secrets & credentials ──────────────────────────────────────────────
 /.env
 /.env.*
 !/.env.example
 /credentials.json
 /token.json
-/nexus_dev.db
-/skills
 
-# Python
+# ── Local databases ─────────────────────────────────────────────────────
+/nexus_dev.db
+*.db
+*.sqlite
+
+# ── Python ──────────────────────────────────────────────────────────────
 /.venv/
 **/__pycache__/
 *.py[cod]
+*.pyo
 .pytest_cache/
+*.egg-info/
+dist/
+build/
 
-# Frontend
+# ── Frontend ─────────────────────────────────────────────────────────────
 /frontend/node_modules/
 /frontend/dist/
+/frontend/.next/
+/frontend/tsconfig.tsbuildinfo
 
-# Logs
+# ── Root node_modules (should never exist here) ──────────────────────────
+/node_modules/
+/package-lock.json
+/package.json
+
+# ── AutoForze binary (built on target) ───────────────────────────────────
+/autoforze/bin/
+/bin/
+
+# ── Runtime / cache junk ─────────────────────────────────────────────────
+/.wwebjs_auth/
+/.wwebjs_cache/
+/.playwright-mcp/
 *.log
+*.pid
+
+# ── Skill library (not project source) ───────────────────────────────────
+/skills/
+
+# ── IDE & OS ──────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+/autoforze/
+/autoforze/

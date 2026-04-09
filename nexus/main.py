@@ -33,6 +33,8 @@ from pydantic import BaseModel
 
 from nexus.config import settings
 from nexus.routers import chat, webhooks, workflows
+from nexus.autoforze_bridge import router as autoforze_router
+from nexus.autoforze_converse import router as autoforze_converse_router
 from nexus.scheduler.reminder_scheduler import start_scheduler, stop_scheduler
 
 # ── Structured Logging ────────────────────────────────────────────────
@@ -124,6 +126,8 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(webhooks.router)
 app.include_router(workflows.router)
+app.include_router(autoforze_router)
+app.include_router(autoforze_converse_router)
 
 # ── Static files (React build) ────────────────────────────────────────
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
@@ -261,6 +265,58 @@ async def api_drive_sync():
     except Exception as e:
         logger.error("api_drive_sync_failed", exc_info=e)
         return {"status": "error", "message": str(e)}
+
+@app.get("/calendar/events")
+async def get_calendar_events(time_min: str = None, time_max: str = None):
+    """Get the user's ongoing and upcoming Google calendar events across all calendars."""
+    from nexus.tools.google_auth import get_google_credentials
+    from googleapiclient.discovery import build
+    from datetime import datetime, timedelta, timezone
+
+    creds = get_google_credentials()
+    if not creds:
+        return {"events": []}
+    
+    svc = build("calendar", "v3", credentials=creds, cache_discovery=False)
+    now = datetime.now(timezone.utc)
+    if not time_min:
+        time_min = now.isoformat()
+    if not time_max:
+        time_max = (now + timedelta(days=90)).isoformat()
+
+    try:
+        calendars = svc.calendarList().list().execute().get('items', [])
+        all_events = []
+        for cal in calendars:
+            if not cal.get('selected'): continue
+            res = svc.events().list(
+                calendarId=cal['id'],
+                timeMin=time_min,
+                timeMax=time_max,
+                maxResults=50,
+                singleEvents=True,
+                orderBy="startTime"
+            ).execute()
+            for ev in res.get('items', []):
+                start = ev.get("start", {}).get("dateTime", ev.get("start", {}).get("date", ""))
+                end = ev.get("end", {}).get("dateTime", ev.get("end", {}).get("date", ""))
+                all_events.append({
+                    "id": ev.get("id"),
+                    "summary": ev.get("summary", "(No title)"),
+                    "start": start,
+                    "end": end,
+                    "link": ev.get("htmlLink"),
+                    "location": ev.get("location", ""),
+                    "description": ev.get("description", ""),
+                    "status": ev.get("status", "confirmed"),
+                    "calendar": cal.get('summary', 'Calendar')
+                })
+        # sort across calendars
+        all_events.sort(key=lambda x: x["start"] if x["start"] else "9999")
+        return {"events": all_events[:50]}
+    except Exception as e:
+        return {"events": [], "error": str(e)}
+
 
 
 # ═══════════════════════════════════════════════════════════════════════

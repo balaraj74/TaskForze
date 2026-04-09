@@ -130,7 +130,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md px-8 text-center mt-[-10vh]">
         <div className="mb-8 flex justify-center">
           <div className="relative h-28 w-28 drop-shadow-[0_0_40px_rgba(123,97,255,0.4)]">
-            <Image src="/logo.png" alt="TaskForze Logo" fill priority className="object-contain" />
+            <Image src="/logo_tf.png" alt="TaskForze Logo" fill priority className="object-contain" />
           </div>
         </div>
 

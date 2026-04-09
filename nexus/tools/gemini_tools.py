@@ -17,14 +17,14 @@ from nexus.config import settings
 logger = structlog.get_logger(__name__)
 
 _client = None
-_HAS_KEY = bool(settings.google_api_key)
+_HAS_KEY = True # Always True since we use Vertex AI (ADC credentials)
 
 
 def _get_client():
     global _client
     if _client is None:
         from google import genai
-        _client = genai.Client(api_key=settings.google_api_key)
+        _client = genai.Client(vertexai=True, project="taskforze", location="us-central1")
     return _client
 
 

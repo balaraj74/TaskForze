@@ -8,7 +8,7 @@ from typing import Any
 
 import structlog
 
-from nexus.tools import db_tools
+from nexus.tools import db_tools, gtasks_tools
 from nexus.tools.dependency_graph import TaskDependencyGraph
 from nexus.tools.gemini_tools import generate_json
 
@@ -49,7 +49,22 @@ async def run(instruction: str, context: dict[str, Any] | None = None) -> dict[s
         task_data = action["task_data"]
         task_data.setdefault("linked_workflow_id", workflow_state.workflow_id if workflow_state else None)
         created = await db_tools.create_task(task_data)
+
+        # Sync to Google Tasks so it appears in Google Calendar
+        due = task_data.get("deadline")
+        if due:
+            # Format to RFC 3339 if needed or pass as is if string
+            if hasattr(due, "isoformat"):
+                due = due.isoformat()
+
+        gtask_result = await gtasks_tools.create_task(
+            title=task_data.get("title", "Untitled task"),
+            notes=task_data.get("description", ""),
+            due=due
+        )
+
         result["created_task"] = created
+        result["gtask_sync"] = gtask_result
         result["summary"] = f"Created task '{created['title']}'"
 
     elif action["action"] == "update" and action.get("task_id"):
